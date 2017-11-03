@@ -1,0 +1,30 @@
+<head>
+    <script src="/static/vue.js"></script>
+</head>
+<body>
+    <h1>test</h1>
+    <span id="list">
+        <li v-for="n in evenNumbers" >{{ n}}{{b}}</li>
+    </span>
+    
+    <script type="text/javascript">
+        var vm = new Vue({
+            el:'#list',
+            data: {
+            numbers: [1,2,3,4,5,6],
+            b:5
+            },
+            created: function () {
+            // `this` 指向 vm 实例
+                console.log('a is: ' + this.numbers)
+            },
+            computed:{
+                evenNumbers:function(){
+                    return this.numbers.filter(function (number) {
+                        return number % 2 === 0
+                    })
+                }
+            }
+        })
+    </script>
+</body>
