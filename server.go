@@ -1,16 +1,15 @@
 package main
 
-import(
+import (
 	"github.com/labstack/echo"
+	"github.com/labstack/echo/middleware"
 	"github.com/whyengineer/echo_web/admin"
 	"github.com/whyengineer/echo_web/app"
-	"github.com/labstack/echo/middleware"
 	// "github.com/gorilla/sessions"
 	// "github.com/labstack/echo-contrib/session"
 )
 
-
-func main()  {
+func main() {
 	e := echo.New()
 	e.Use(middleware.Logger())
 	admin.Load(e)

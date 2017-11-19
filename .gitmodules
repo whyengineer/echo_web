@@ -1,0 +1,3 @@
+[submodule "app/vue_web"]
+	path = app/vue_web
+	url = https://github.com/whyengineer/vue_web
