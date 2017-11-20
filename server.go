@@ -14,5 +14,5 @@ func main() {
 	e.Use(middleware.Logger())
 	admin.Load(e)
 	app.Load(e)
-	e.Logger.Fatal(e.Start(":1323"))
+	e.Logger.Fatal(e.Start("127.0.0.1:1323"))
 }
