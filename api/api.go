@@ -6,8 +6,8 @@ import (
 	"github.com/labstack/echo/middleware"
 	"net/http"
 	"fmt"
+	"time"
 )
-
 
 
 
@@ -24,5 +24,19 @@ func Load(e *echo.Echo) *echo.Group{
 	api.GET("/test",func(c echo.Context) error {
 		return c.String(http.StatusOK, "Hello, World!")
 	})
+	var err error
+	calM,err=NewCalMachine("ethusdt","huobi")
+	if err!=nil{
+		fmt.Println(err)
+	}
+	stop:=int32(time.Now().Unix())
+	start:=stop-60
+	calRes,err:=calM.CalData(start,stop)
+	if err!=nil{
+		fmt.Println(err)
+	}
+	for _,v:=range calRes{
+		fmt.Println("buyamount:",v.BuyAmount,"sellamount:",v.SellAmount,"price:",v.Price)
+	}
 	return api
 }
