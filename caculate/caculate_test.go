@@ -13,8 +13,8 @@ func Test_caculate(t *testing.T){
 	}
 	cm.StartCal()
 	for{
-		cm.GetMin1Info(1514455800)
-		cm.GetMin5Info(1514455800)
-		time.Sleep(5*time.Second)
+		//cm.GetMin1Info(1514455800)
+		//cm.GetMin5Info(1514455800)
+		val,time.Sleep(5*time.Second)
 	}
 }

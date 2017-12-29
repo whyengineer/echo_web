@@ -21,12 +21,12 @@ func NewSocketServer() *socketio.Server {
 	}
 	server.On("connection", func(so socketio.Socket) {
 		log.Println("on connection")
-		trade,err:=NewTradeApi()
-		if err != nil {
-			log.Fatal(err)
-		}
-		trade.TradePush("btcusdt","huobi",so)
-		trade.TradePush("ethusdt","huobi",so)
+		// trade,err:=NewTradeApi()
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
+		// trade.TradePush("btcusdt","huobi",so)
+		// trade.TradePush("ethusdt","huobi",so)
 		// so.Join("chat")
 		// so.On("chat_message", func(msg string) {
 		// 	so.Emit("chat_message", msg)
@@ -36,7 +36,6 @@ func NewSocketServer() *socketio.Server {
 		// })
 		so.On("disconnection", func() {
 			log.Println("on disconnect")
-			trade.rclient.Close()
 		})
 	})
 	server.On("error", func(so socketio.Socket, err error) {

@@ -26,8 +26,6 @@ type CalInfo struct{
 
 type CalMachine struct{
 	rclient *redis.Client
-	lastTs int32
-	nowTs int32
 	CoinType string
 	Prop string
 	SecInfo map[int32]CalInfo
@@ -36,12 +34,12 @@ type CalMachine struct{
 }
 func (c *CalMachine)GetMin5Info(ts int32){
 	var minCalInfo CalInfo
-	startTs:=(ts/300)*300
-	stopTs:=startTs+300
-	minCalInfo.Ts=startTs
+	stopTs:=ts
+	startTs:=ts-300
+	minCalInfo.Ts=ts
 	var j int32
 	for i:=startTs;i < stopTs;i+=60{
-		val,ok:=c.SecInfo[i]
+		val,ok:=c.Min1Info[i/60*60]
 		if ok {
 			j++
 			minCalInfo.BuyAmount+=val.BuyAmount
@@ -49,13 +47,17 @@ func (c *CalMachine)GetMin5Info(ts int32){
 			minCalInfo.Price+=val.Price
 		}
 	}
-	minCalInfo.Price/=float64(j)
-	c.Min5Info[startTs]=minCalInfo
+	if j!=0{
+		minCalInfo.Price/=float64(j)
+	}
+	
+	c.Min5Info[stopTs/300*300]=minCalInfo
 }
 func (c *CalMachine)GetMin1Info(ts int32){
 	var minCalInfo CalInfo
-	startTs:=(ts/60)*60
-	stopTs:=startTs+60
+	
+	stopTs:=ts
+	startTs:=ts-60
 	minCalInfo.Ts=startTs
 	var j int32
 	for i:=startTs;i < stopTs;i++{
@@ -67,9 +69,11 @@ func (c *CalMachine)GetMin1Info(ts int32){
 			minCalInfo.Price+=val.Price
 		}
 	}
-	minCalInfo.Price/=float64(j)
-	c.Min1Info[startTs]=minCalInfo
-	log.Println(minCalInfo.Price,minCalInfo.BuyAmount,minCalInfo.SellAmount)
+	if j!=0{
+		minCalInfo.Price/=float64(j)
+	}	
+	c.Min1Info[stopTs/60*60]=minCalInfo
+	//log.Println(minCalInfo.Price,minCalInfo.BuyAmount,minCalInfo.SellAmount)
 }
 func (c *CalMachine)GetSecInfo(ts int32){
 	var singleV CoinInfo
@@ -115,30 +119,65 @@ func (c *CalMachine)GetSecInfo(ts int32){
 
 func (c* CalMachine)StartCal(){
 	//start init the ram data
-	c.nowTs=int32(time.Now().Unix())
-	c.lastTs=c.nowTs-3600
 
-	a:=c.lastTs
-	b:=c.nowTs
+	b:=int32(time.Now().Unix())
+	a:=b-3600	
 	go func(){
 		for i:=a;i< b;i++{
 			c.GetSecInfo(i)
 		}
 		log.Println("init seconde data done")
+		for i:=a+60;i< b;i+=60{
+			c.GetMin1Info(i)
+		}
+		log.Println("init 1 minute data done")
+		for i:=a+300;i< b;i+=300{
+			c.GetMin5Info(i)
+		}
+		log.Println("init 5 minute data done")
+		log.Println("strat delete timeout data")
+		secondTick:=time.Tick(1*time.Second)
+		for{
+			<-secondTick
+			delete(c.SecInfo,a)
+			delete(c.Min1Info,a/60*60)
+			delete(c.Min5Info,a/300*300)
+		}
+		
+		
+		
+		
 	}()
 
 	go func(){
-		tick:=time.Tick(1*time.Second)
+		secondTick:=time.Tick(1*time.Second)
+		min1Tick:=time.Tick(1*time.Minute)
+		min5Tick:=time.Tick(5*time.Minute)
 		for{
-			<-tick
-			c.GetSecInfo(c.nowTs)
-			_,ok:=c.SecInfo[c.nowTs]
-			if ok {
-				// log.Println(val.BuyAmount,val.SellAmount,val.Price)
+			select{
+			case nowSecTime:=<-secondTick:
+				nowTs:=int32(nowSecTime.Unix())
+				c.GetSecInfo(nowTs)
+				val,ok:=c.SecInfo[nowTs]
+				if ok {
+					log.Println("second data:",val.BuyAmount,val.SellAmount,val.Price)
+				}
+			case nowMin1Time:=<-min1Tick:
+				nowTs:=int32(nowMin1Time.Unix())
+				c.GetMin1Info(nowTs)
+				val,ok:=c.Min1Info[nowTs/60*60]
+				if ok {
+					log.Println("1 minute data:",val.BuyAmount,val.SellAmount,val.Price)
+				}
+			case nowMin5Time:=<-min5Tick:
+				nowTs:=int32(nowMin5Time.Unix())
+				c.GetMin1Info(nowTs)
+				val,ok:=c.Min5Info[nowTs/300*300]
+				if ok {
+					log.Println("5 minute data:",val.BuyAmount,val.SellAmount,val.Price)
+				}
 			}
-			c.nowTs++
-			delete(c.SecInfo,c.lastTs)
-			c.lastTs++
+			
 		}
 	}()
 }
