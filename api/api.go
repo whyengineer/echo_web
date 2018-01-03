@@ -11,7 +11,9 @@ import (
 )
 
 
-var cm *cal.CalMachine
+var btccm *cal.CalMachine
+var ethcm *cal.CalMachine
+var eoscm *cal.CalMachine
 
 func Load(e *echo.Echo) *echo.Group{
 	server:=NewSocketServer()
@@ -26,43 +28,73 @@ func Load(e *echo.Echo) *echo.Group{
 		return c.String(http.StatusOK, "Hello, World!")
 	})
 	api.GET("/gettrade",GetTradeInfo)
+
+
+
+	
 	var err error
-	cm,err=cal.NewCalMachine("btcusdt","huobi")
+	btccm,err=cal.NewCalMachine("btcusdt","huobi")
 	if err!=nil{
 		log.Println(err)
 	}
-	cm.StartCal()
+	btccm.StartCal()
+	ethcm,err=cal.NewCalMachine("ethusdt","huobi")
+	if err!=nil{
+		log.Println(err)
+	}
+	ethcm.StartCal()
+	eoscm,err=cal.NewCalMachine("eosusdt","huobi")
+	if err!=nil{
+		log.Println(err)
+	}
+	eoscm.StartCal()
 	return api
 }
 
 func GetTradeInfo(c echo.Context) error {
 	timeType := c.QueryParam("timetype")
 	ts,_:=strconv.Atoi(c.QueryParam("ts"))
-	if timeType=="second"{
-		val,ok:=cm.SecInfo[int32(ts)]
-		if ok{
-			return c.JSON(http.StatusOK,&val)
-		}else{
-			empty:=&cal.CalInfo{}
-			return c.JSON(http.StatusOK,empty)
+	cointype:=c.QueryParam("cointype")
+	if cointype=="btcusdt"{
+		if timeType=="second"{
+			t:=btccm.GetSecInfo(int32(ts))
+			return c.JSON(http.StatusOK,&t)
+		}
+		if timeType=="minute1"{
+			t:=btccm.GetMin1Info(int32(ts))
+			return c.JSON(http.StatusOK,&t)
+		}
+		if timeType=="minute5"{
+			t:=btccm.GetMin5Info(int32(ts))
+			return c.JSON(http.StatusOK,&t)
 		}
 	}
-	if timeType=="minute1"{
-		val,ok:=cm.Min1Info[int32(ts)/60*60]
-		if ok{
-			return c.JSON(http.StatusOK,&val)
-		}else{
-			empty:=&cal.CalInfo{}
-			return c.JSON(http.StatusOK,empty)
+	if cointype=="ethusdt"{
+		if timeType=="second"{
+			t:=ethcm.GetSecInfo(int32(ts))
+			return c.JSON(http.StatusOK,&t)
+		}
+		if timeType=="minute1"{
+			t:=ethcm.GetMin1Info(int32(ts))
+			return c.JSON(http.StatusOK,&t)
+		}
+		if timeType=="minute5"{
+			t:=ethcm.GetMin5Info(int32(ts))
+			return c.JSON(http.StatusOK,&t)
 		}
 	}
-	if timeType=="minute5"{
-		val,ok:=cm.Min5Info[int32(ts)/300*300]
-		if ok{
-			return c.JSON(http.StatusOK,&val)
-		}else{
-			empty:=&cal.CalInfo{}
-			return c.JSON(http.StatusOK,empty)
+	if cointype=="eosusdt"{
+		if timeType=="second"{
+			t:=eoscm.GetSecInfo(int32(ts))
+			return c.JSON(http.StatusOK,&t)
+		}
+		if timeType=="minute1"{
+			t:=eoscm.GetMin1Info(int32(ts))
+			return c.JSON(http.StatusOK,&t)
+		}
+		if timeType=="minute5"{
+			t:=eoscm.GetMin5Info(int32(ts))
+			return c.JSON(http.StatusOK,&t)
 		}
 	}
 	return nil

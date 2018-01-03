@@ -4,6 +4,8 @@ package api
 import (
 	"log"
 	"github.com/googollee/go-socket.io"
+	cal "github.com/whyengineer/echo_web/caculate"
+	"encoding/json"
 )
 // var (
 // 	upgrader = websocket.Upgrader{
@@ -11,9 +13,10 @@ import (
 // 	}
 // )
 
+
+
 func NewSocketServer() *socketio.Server {
 	//create a connect
-	
 
 	server, err := socketio.NewServer(nil)
 	if err != nil {
@@ -21,6 +24,25 @@ func NewSocketServer() *socketio.Server {
 	}
 	server.On("connection", func(so socketio.Socket) {
 		log.Println("on connection")
+		log.Println(so.Id())
+		dataC:=make(chan cal.CalInfo)
+		cal.NoticeJoin(so.Id(),dataC)
+		done:=make(chan struct{})
+		go func(){
+			for{
+				select{
+				case data:=<-dataC:
+					//log.Println(so.Id(),data.CoinType,data.Price,data.BuyAmount,data.SellAmount)
+					as,_:=json.Marshal(&data)
+					so.Emit(data.CoinType,string(as))
+				case <-done:
+					log.Println("bye bye")
+					return
+				}	
+			}
+		}()
+		
+
 		// trade,err:=NewTradeApi()
 		// if err != nil {
 		// 	log.Fatal(err)
@@ -35,7 +57,9 @@ func NewSocketServer() *socketio.Server {
 		// 	so.BroadcastTo("chat", "chat_message", msg)
 		// })
 		so.On("disconnection", func() {
+			close(done)
 			log.Println("on disconnect")
+			cal.NoticeQuit(so.Id())
 		})
 	})
 	server.On("error", func(so socketio.Socket, err error) {

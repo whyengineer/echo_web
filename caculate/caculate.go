@@ -8,6 +8,8 @@ import(
 	"log"
 )
 
+
+
 type CoinInfo struct {
 	CoinType string  `json:CoinType`
 	Amount   float64 `json:Amount`
@@ -18,6 +20,7 @@ type CoinInfo struct {
 }
 
 type CalInfo struct{	
+	CoinType string
 	BuyAmount  float64
 	SellAmount float64
 	Price float64
@@ -29,17 +32,16 @@ type CalMachine struct{
 	CoinType string
 	Prop string
 	SecInfo map[int32]CalInfo
-	Min1Info map[int32]CalInfo
-	Min5Info map[int32]CalInfo
 }
-func (c *CalMachine)GetMin5Info(ts int32){
+func (c *CalMachine)GetMin5Info(ts int32)CalInfo{
 	var minCalInfo CalInfo
+	minCalInfo.CoinType=c.CoinType
 	stopTs:=ts
 	startTs:=ts-300
-	minCalInfo.Ts=ts
+	minCalInfo.Ts=startTs
 	var j int32
-	for i:=startTs;i < stopTs;i+=60{
-		val,ok:=c.Min1Info[i/60*60]
+	for i:=startTs;i < stopTs;i++{
+		val,ok:=c.SecInfo[i]
 		if ok {
 			j++
 			minCalInfo.BuyAmount+=val.BuyAmount
@@ -49,13 +51,13 @@ func (c *CalMachine)GetMin5Info(ts int32){
 	}
 	if j!=0{
 		minCalInfo.Price/=float64(j)
-	}
-	
-	c.Min5Info[stopTs/300*300]=minCalInfo
+	}	
+	return minCalInfo
+	//log.Println(minCalInfo.Price,minCalInfo.BuyAmount,minCalInfo.SellAmount)
 }
-func (c *CalMachine)GetMin1Info(ts int32){
+func (c *CalMachine)GetMin1Info(ts int32)CalInfo{
 	var minCalInfo CalInfo
-	
+	minCalInfo.CoinType=c.CoinType
 	stopTs:=ts
 	startTs:=ts-60
 	minCalInfo.Ts=startTs
@@ -72,14 +74,22 @@ func (c *CalMachine)GetMin1Info(ts int32){
 	if j!=0{
 		minCalInfo.Price/=float64(j)
 	}	
-	c.Min1Info[stopTs/60*60]=minCalInfo
+	return minCalInfo
 	//log.Println(minCalInfo.Price,minCalInfo.BuyAmount,minCalInfo.SellAmount)
 }
-func (c *CalMachine)GetSecInfo(ts int32){
+func (c *CalMachine)GetSecInfo(ts int32)CalInfo{
+	minCalInfo,_:=c.SecInfo[ts]
+	minCalInfo.Ts=ts	
+	minCalInfo.CoinType=c.CoinType
+	return minCalInfo
+	//log.Println(minCalInfo.Price,minCalInfo.BuyAmount,minCalInfo.SellAmount)
+}
+func (c *CalMachine)CalSecInfo(ts int32){
 	var singleV CoinInfo
 	var value []CoinInfo
 	var single_cal CalInfo
 	single_cal.Ts=ts
+	single_cal.CoinType=c.CoinType
 	key:=c.CoinType+":"+c.Prop+":"+strconv.FormatInt(int64(ts),10)
 	val, err := c.rclient.Get(key).Result()
 	if err == redis.Nil{
@@ -119,29 +129,20 @@ func (c *CalMachine)GetSecInfo(ts int32){
 
 func (c* CalMachine)StartCal(){
 	//start init the ram data
+	StartNoticeQueue()
 
 	b:=int32(time.Now().Unix())
 	a:=b-3600	
 	go func(){
 		for i:=a;i< b;i++{
-			c.GetSecInfo(i)
+			c.CalSecInfo(i)
 		}
 		log.Println("init seconde data done")
-		for i:=a+60;i< b;i+=60{
-			c.GetMin1Info(i)
-		}
-		log.Println("init 1 minute data done")
-		for i:=a+300;i< b;i+=300{
-			c.GetMin5Info(i)
-		}
-		log.Println("init 5 minute data done")
 		log.Println("strat delete timeout data")
 		secondTick:=time.Tick(1*time.Second)
 		for{
 			<-secondTick
 			delete(c.SecInfo,a)
-			delete(c.Min1Info,a/60*60)
-			delete(c.Min5Info,a/300*300)
 		}
 		
 		
@@ -151,30 +152,15 @@ func (c* CalMachine)StartCal(){
 
 	go func(){
 		secondTick:=time.Tick(1*time.Second)
-		min1Tick:=time.Tick(1*time.Minute)
-		min5Tick:=time.Tick(5*time.Minute)
+
 		for{
 			select{
 			case nowSecTime:=<-secondTick:
 				nowTs:=int32(nowSecTime.Unix())
-				c.GetSecInfo(nowTs)
+				c.CalSecInfo(nowTs)
 				val,ok:=c.SecInfo[nowTs]
 				if ok {
-					log.Println("second data:",val.BuyAmount,val.SellAmount,val.Price)
-				}
-			case nowMin1Time:=<-min1Tick:
-				nowTs:=int32(nowMin1Time.Unix())
-				c.GetMin1Info(nowTs)
-				val,ok:=c.Min1Info[nowTs/60*60]
-				if ok {
-					log.Println("1 minute data:",val.BuyAmount,val.SellAmount,val.Price)
-				}
-			case nowMin5Time:=<-min5Tick:
-				nowTs:=int32(nowMin5Time.Unix())
-				c.GetMin1Info(nowTs)
-				val,ok:=c.Min5Info[nowTs/300*300]
-				if ok {
-					log.Println("5 minute data:",val.BuyAmount,val.SellAmount,val.Price)
+					NoticeSend(val)
 				}
 			}
 			
@@ -186,8 +172,6 @@ func NewCalMachine(cointype string,prop string)(*CalMachine,error){
 	c.CoinType=cointype
 	c.Prop=prop
 	c.SecInfo=make(map[int32]CalInfo)
-	c.Min1Info=make(map[int32]CalInfo)
-	c.Min5Info=make(map[int32]CalInfo)
 	
 	//start redis
 	c.rclient = redis.NewClient(&redis.Options{
