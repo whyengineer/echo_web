@@ -1,19 +1,19 @@
 package api
 
-
 import (
 	"log"
+
+	"golang.org/x/sync/syncmap"
+
 	"github.com/googollee/go-socket.io"
-	cal "github.com/whyengineer/echo_web/caculate"
-	"encoding/json"
+	"github.com/whyengineer/api.cryptobc.info/market"
 )
+
 // var (
 // 	upgrader = websocket.Upgrader{
 // 		CheckOrigin: func(r *http.Request) bool { return true },
 // 	}
 // )
-
-
 
 func NewSocketServer() *socketio.Server {
 	//create a connect
@@ -25,46 +25,57 @@ func NewSocketServer() *socketio.Server {
 	server.On("connection", func(so socketio.Socket) {
 		log.Println("on connection")
 		log.Println(so.Id())
-		dataC:=make(chan cal.CalInfo)
-		cal.NoticeJoin(so.Id(),dataC)
-		done:=make(chan struct{})
-		go func(){
-			for{
-				select{
-				case data:=<-dataC:
-					//log.Println(so.Id(),data.CoinType,data.Price,data.BuyAmount,data.SellAmount)
-					as,_:=json.Marshal(&data)
-					so.Emit(data.CoinType,string(as))
+		done := make(chan struct{})
+		so.On("joincoin", func(msg string) {
+			//so.Emit("coin", msg)
+			log.Println("join the coin:", msg)
+			datac := make(chan market.CoinInfo)
+			group, ok := api.Mq[msg]
+			if ok {
+				_, in := group.Load(so.Id())
+				if in {
+					log.Println("the id has stored")
+				} else {
+					group.Store(so.Id(), datac)
+				}
+			} else {
+				t := new(syncmap.Map)
+				api.Mq[msg] = t
+				t.Store(so.Id(), datac)
+			}
+			go func() {
+				select {
+				case data := <-datac:
+					log.Println(data)
 				case <-done:
 					log.Println("bye bye")
 					return
-				}	
+				}
+			}()
+		})
+		so.On("quitcoin", func(msg string) {
+			a, ok := api.Mq[msg]
+			if ok {
+				a.Delete(so.Id())
+			} else {
+				log.Println("the coin not in the map")
 			}
-		}()
-		
-
-		// trade,err:=NewTradeApi()
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
-		// trade.TradePush("btcusdt","huobi",so)
-		// trade.TradePush("ethusdt","huobi",so)
-		// so.Join("chat")
-		// so.On("chat_message", func(msg string) {
-		// 	so.Emit("chat_message", msg)
-		// 	log.Println("emit:",msg)
-		// 	trade.GetNowInfo("btcusdt","huobi",10)
-		// 	so.BroadcastTo("chat", "chat_message", msg)
-		// })
-		so.On("disconnection", func() {
+			log.Println("quit the coin:", msg)
 			close(done)
+			//it's ok,beacaue no rt wait the channel,if has a rt wait the channel ,then the rt is block always!!!
+			done = make(chan struct{})
+		})
+		so.On("disconnection", func() {
+			for _, val := range api.Mq {
+				val.Delete(so.Id())
+			}
 			log.Println("on disconnect")
-			cal.NoticeQuit(so.Id())
+			close(done)
 		})
 	})
 	server.On("error", func(so socketio.Socket, err error) {
 		log.Println("error:", err)
-		
+
 	})
 
 	return server
